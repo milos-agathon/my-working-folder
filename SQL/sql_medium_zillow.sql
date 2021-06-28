@@ -120,6 +120,6 @@ VALUES
 SELECT a.city, AVG(a.mkt_price)
 FROM zillow_transactions a
 GROUP BY a.city
-HAVING AVG(a.mkt_price) > (SELECT AVG(mkt_price) FROM zillow_transactions)
+HAVING AVG(a.mkt_price) > (SELECT AVG(mkt_price) FROM a)
 ORDER BY a.city ASC
 ;
