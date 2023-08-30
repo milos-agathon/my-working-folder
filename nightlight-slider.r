@@ -8,7 +8,7 @@ setwd("/Users/mpopovic3/Downloads/nightlight/nl")
 # define libraries we need
 libs <- c(
     "tidyverse", "terra", "sf",
-    "geodata", "shiny"
+    "geodata", "shiny", "shiny.slider"
 )
 
 # install missing libraries
@@ -44,7 +44,7 @@ for (u in url) {
 
 raster_files <- list.files(
     path = getwd(),
-    pattern = ".tif",
+    pattern = "VNL",
     full.names = T
 )
 
@@ -72,8 +72,8 @@ globe_lights <- lapply(
 # bb <- get_bounding_box_europe()
 
 country_sf <- giscoR::gisco_get_countries(
-    country = "NL",
-    resolution = "3"
+    country = "UA",
+    resolution = "1"
 )
 
 plot(sf::st_geometry(country_sf))
@@ -105,6 +105,16 @@ country_lights_reproj <- lapply(
     }
 )
 
+country_lights_reproj2 <- lapply(
+    country_lights_reproj, function(x) {
+        terra::ifel(
+            x <= 0,
+            NA,
+            x
+        )
+    }
+)
+
 # country_lights_reproj[[1]] <- terra::resample(
 #     country_lights_reproj[[1]],
 #     country_lights_reproj[[2]]
@@ -122,7 +132,7 @@ country_lights_reproj <- lapply(
 # 2. NC TO DATAFRAME
 #-------------------
 country_lights_df <- lapply(
-    country_lights_reproj, function(x) {
+    country_lights_reproj2, function(x) {
         as.data.frame(
             x,
             xy = T,
@@ -149,9 +159,10 @@ head(country_lights_df)
 #     style = "equal"
 # )$brks
 
-cols <- c("#182833", "#1f4762", "#FFD966")
-pal <- colorRampPalette(cols, bias = 6)(16)
-
+cols <- c("#1f4762", "#FFD966", "white")
+pal <- colorRampPalette(cols, bias = 8)(512)
+w <- ncol(country_lights_reproj2[[1]])
+h <- nrow(country_lights_reproj2[[1]])
 
 map <- lapply(
     country_lights_df,
@@ -163,7 +174,7 @@ map <- lapply(
                 x = x, y = y, fill = value
             )) +
             scale_fill_gradientn(
-                name = "Celsius degree",
+                name = "",
                 colours = pal
             ) +
             coord_sf(
@@ -190,7 +201,7 @@ map <- lapply(
                 axis.text.x = element_blank(),
                 axis.text.y = element_blank(),
                 axis.ticks = element_blank(),
-                legend.position = c(.1, .6),
+                legend.position = "none",
                 legend.title = element_text(
                     size = 11, color = "grey10"
                 ),
@@ -209,7 +220,14 @@ map <- lapply(
                 panel.grid.minor = element_blank(),
                 plot.margin = unit(
                     c(t = 1, r = 0, l = 0, b = 0), "lines"
-                )
+                ),
+                plot.background = element_rect(
+                    fill = "#182833",
+                    color = NA
+                ),
+                legend.background = element_rect(
+                    fill = "#182833", color = NA
+                ),
             ) +
             labs(
                 x = "",
@@ -221,8 +239,62 @@ map <- lapply(
 )
 
 for (i in 1:2) {
-    file_name <- paste0("map_", i, ".png")
-    png(file_name)
+    file_name <- paste0("ua_map_", i, ".png")
+    png(
+        file_name,
+        width = w,
+        height = h,
+        units = "px",
+        res = NA,
+        bg = "#182833"
+    )
     print(map[[i]])
     dev.off()
 }
+
+
+devtools::install_github("Timag/shiny.slider")
+.libPaths()
+# setwd("/Users/mpopovic3/Library/R/arm64/4.2/library/shiny/app_template/")
+# shiny::runApp()
+
+ui <- fluidPage(
+  
+  tags$script(src = "jquery-1.6.1.min.js"),
+  tags$script(src = "jquery-ui-1.8.13.custom.min.js"),
+  tags$script(src = "jquery.beforeafter-1.4.min.js"),
+  
+  tags$script("
+            $(function() {
+                $('#slider').beforeAfter({
+                    introDelay: 2000,
+                    imagePath: 'img/',
+                    introDuration: 500,
+                    showFullLinks: false
+                })
+              });
+  "),
+  
+  mainPanel(
+    
+    tags$div(
+      id = "slider",
+      img(
+        src = "ua_map_1.png", 
+        width = 1920, 
+        height = 1080
+      ),
+      
+      img(
+        src = "ua_map_2.png", 
+        width = 1920, 
+        height = 1080
+      )
+    )
+  )
+  
+)
+
+server <- function(input, output, session){}
+
+shinyApp(ui, server)
