@@ -9,7 +9,7 @@
 libs <- c(
     "ecmwfr", "tidyverse", "metR",
     "terra", "sf", "giscoR", "classInt",
-    "lubridate", "hms"
+    "lubridate", "hms", "gganimate"
 )
 
 installed_libs <- libs %in% rownames(
@@ -190,3 +190,32 @@ europe_wind_stream_df <- dplyr::left_join(
 
 nrow(europe_wind_stream_df)
 
+p <- ggplot() +
+    # geom_sf(data = bg) +
+    # coord_sf(
+    #     xlim = range(df_all$lon, na.rm = TRUE),
+    #     ylim = range(df_all$lat, na.rm = TRUE),
+    #     expand = FALSE
+    # ) +
+    # lines
+    geom_path(
+        data = europe_wind_stream_df,
+        aes(x = x, y = y, group = id, color = speed),
+        alpha = .65
+    ) +
+    scale_fill_viridis_c(option = "inferno") +
+    scale_color_viridis_c(option = "inferno") +
+    scale_size_continuous(range = c(.1, 10)) +
+    labs(
+        x = NULL, y = NULL,
+        fill = "Speed (m/s)",
+        color = "Speed (m/s)"
+    ) +
+    theme_void()
+
+anim <- p +
+    gganimate::transition_reveal(along = time) +
+    gganimate::ease_aes("linear") +
+    ggtitle("Date: {frame_along}")
+
+gganimate::animate(anim, nframes = 240, fps = 10)
