@@ -5,15 +5,16 @@
 #######################################################
 
 # 	|￣￣￣￣￣￣|
-# 	| BEGIN      |
-# 	| REPLICATION|
-# 	|            |
-# 	|            |
-# 	| ＿＿＿＿＿__|
+# 	| START!   |
+# 	|          |
+# 	|          |
+# 	|          |
+# 	| ＿＿＿＿＿ |
 # 	(\__/) ||
 # 	(•ㅅ•) ||
 # 	/ 　 づ
 
+# 1. PACKAGES
 # libraries we need
 libs <- c(
   "tidyverse", "osmdata", "dodgr",
@@ -30,7 +31,7 @@ if (any(installed_libs == FALSE)) {
 # load libraries
 invisible(lapply(libs, library, character.only = TRUE))
 
-# download official 2021 Serbian census circles
+# 2. BOUNDING BOX
 
 # 20.417487,44.800668,20.484438,44.832196
 
@@ -45,6 +46,8 @@ belgrade_bbox <- c(xmin = xmin, ymin = ymin, xmax = xmax, ymax = ymax) |>
     crs = 4326
   )
 
+# 3. STREET LAYER
+
 # define Belgrade's bounding box based on ggmap's bounding box
 belgrade_streets <- maptiles::get_tiles(
   belgrade_bbox,
@@ -57,7 +60,7 @@ ggplot() +
     data = belgrade_streets
   )
 
-# fetch Belgrade's petrol stations
+# 4. FUEL STATIONS
 bg_amen <- osmdata::opq(
   bbox = belgrade_bbox, timeout = 180, memsize = 104857600
 ) |>
@@ -76,8 +79,12 @@ ggplot() +
   ) +
   geom_sf(data = bg_p, color = "red", inherit.aes = F)
 
-# get Belgrade's paved roads
-bg_way <- opq(bbox = belgrade_bbox, timeout = 120, memsize = 104857600) |>
+# 5. OSM ROADS
+bg_way <- opq(
+  bbox = belgrade_bbox,
+  timeout = 120,
+  memsize = 104857600
+) |>
   add_osm_feature(
     key = "highway"
   ) |>
@@ -85,7 +92,6 @@ bg_way <- opq(bbox = belgrade_bbox, timeout = 120, memsize = 104857600) |>
 
 bg_r <- bg_way$osm_lines
 
-# let's peek into the locations of ATMs/banks and roads
 ggplot() +
   tidyterra::geom_spatraster_rgb(
     data = belgrade_streets
@@ -111,8 +117,7 @@ ggplot() +
   theme_void()
 
 
-
-# apartments
+# 6. APARTMENTS
 
 bg_apartments <- osmdata::opq(
   bbox = belgrade_bbox, timeout = 180, memsize = 104857600
@@ -134,11 +139,13 @@ ggplot() +
   tidyterra::geom_spatraster_rgb(
     data = belgrade_streets
   ) +
-  geom_sf(data = bg_apartments_pts, color = "red", inherit.aes = F)
+  geom_sf(
+    data = bg_apartments_pts,
+    color = "red",
+    inherit.aes = F
+  )
 
-
-
-# decompose roads into distinct edges
+# 7. ROADS TO EDGES
 g <- dodgr::weight_streetnet(
   bg_r,
   wt_profile = "motorcar",
@@ -147,8 +154,7 @@ g <- dodgr::weight_streetnet(
 dim(g)
 head(g)
 
-# define origin, destination and compute distance
-
+# 8. ORIGIN, DESTINATION, SHORTEST DISTANCE
 from <- sf::st_coordinates(bg_apartments_pts)
 to <- sf::st_coordinates(bg_p)
 
@@ -169,7 +175,6 @@ lines_df <- data.frame(
 head(lines_df)
 nrow(lines_df)
 head(graph_undir)
-
 
 paths_sf <- dodgr_flows_aggregate(
   graph = g,
@@ -212,54 +217,103 @@ ggplot() +
   ) +
   theme_void()
 
-# This is where we will put our results
-# route_results <- list()
+# 9. SHORTEST ROUTE EDGES
 
-# for (i in 1:nrow(route_distances)) {
-#   list_of_graph_edges <- dodgr_paths(g,
-#     from = from,
-#     to = to,
-#     vertices = FALSE
-#   )
-#   # [[1]][[1]]
+route_distances_df <-
+  route_distances |>
+  as.matrix() |>
+  as.data.frame() |>
+  t()
 
-#   route_results[[i]] <- list_of_graph_edges
-# }
+route_distances_df <- cbind(
+  edge_id = rownames(route_distances_df),
+  route_distances_df
+) |>
+  as.data.frame() |>
+  dplyr::rename(
+    distance = `2097635499`
+  ) |>
+  dplyr::mutate(
+    distance = as.numeric(distance)
+  ) |>
+  dplyr::arrange(distance) |>
+  dplyr::distinct(
+    edge_id, distance,
+    .keep_all = T
+  ) |>
+  dplyr::slice_head(n = 1)
 
-# nrow(route_distances)
-# length(route_results)
-# head(route_results)
-# head(g)
+rownames(route_distances_df) <- NULL
+names(route_distances_df)[2] <- "distance"
 
-# unique(route_results)
-# shortest to dist
-# 9804675161
+head(route_distances_df)
 
-unique(paths_sf$to_id)
+route_results <- list()
 
-shortest_path <- paths_sf |>
-  select(from_id, to_id) |>
-  dplyr::filter(
-    to_id == 9804675161 |
-    from_id == 9804675161
+for (i in 1:nrow(route_distances)) {
+  list_of_graph_edges <- dodgr::dodgr_paths(
+    g,
+    from = from,
+    to = to,
+    vertices = FALSE
   )
+  # [[1]][[1]]
+
+  route_results[[i]] <- list_of_graph_edges
+}
+
+str(list_of_graph_edges)
+class(shortest_line)
+
+df_graph_edges <- unlist(
+  list_of_graph_edges
+) |>
+  as.matrix() |>
+  as.data.frame()
+
+df_graph_edges <- cbind(id = rownames(df_graph_edges), df_graph_edges)
+rownames(df_graph_edges) <- NULL
+names(df_graph_edges)[2] <- "edge_id"
+
+
+shortest_line <- df_graph_edges |>
+  dplyr::filter(
+    stringr::str_detect(
+      id, route_distances_df$edge_id
+    )
+  ) |>
+  dplyr::mutate(edge_id = as.character(edge_id))
+
+unique(shortest_line$edge_id)
+unique(paths_sf$geom_num)
+
+gsf <- dodgr::dodgr_to_sf(g)
+
+shortest_path_sf <- gsf |>
+  dplyr::select(edge_id) |>
+  dplyr::filter(
+    edge_id %in% unique(shortest_line$edge_id)
+  )
+
+unique(gsf$edge_id)
+
 
 ggplot() +
   tidyterra::geom_spatraster_rgb(
     data = belgrade_streets
   ) +
-  geom_sf(
-    data = shortest_path,
-    inherit.aes = F,
-    col = "purple",
-    size = .15
-  ) +
+  # geom_sf(
+  #   data = shortest_path_sf,
+  #   inherit.aes = F,
+  #   col = "purple",
+  #   size = .3
+  # ) +
   geom_sf(
     data = paths_sf,
     inherit.aes = F,
     col = "black",
-    alpha = .45,
-    size = .15
+    alpha = .25,
+    size = .1
   ) +
   geom_point(
     data = lines_df,
@@ -283,9 +337,9 @@ ggplot() +
   theme_void()
 
 
-df <- apply(dists, 1, FUN = min, na.rm = TRUE) %>% as.data.frame()
 
 names(dists) <- c("from_id", "to_id", "distance")
+
 
 head(dists)
 nrow(dists)
@@ -306,174 +360,6 @@ graph_undir <- merge_directed_graph(d) |>
 head(graph_undir)
 nrow(graph_undir)
 
-df <- apply(
-  d, 1,
-  FUN = min, na.rm = TRUE
-) |>
-  as.data.frame()
-
-df <- cbind(id = rownames(df), df)
-rownames(df) <- NULL
-names(df)[2] <- "dist"
-
-head(df)
-nrow(df)
-
-
-
-ggplot() +
-  tidyterra::geom_spatraster_rgb(
-    data = belgrade_streets
-  ) +
-  geom_sf(
-    data = graph_undir,
-    inherit.aes = F,
-    col = "#d94496",
-    alpha = .6,
-    size = 1.5
-  ) +
-  geom_sf(
-    data = bg_apartments_pts,
-    inherit.aes = F,
-    col = "green",
-    size = 1.5
-  ) +
-  geom_sf(
-    data = bg_p,
-    inherit.aes = F,
-    col = "purple",
-    size = 1.5
-  ) +
-  coord_sf(
-    crs = 4326,
-    xlim = c(xmin, xmax),
-    ylim = c(ymin, ymax)
-  ) +
-  theme_void()
-
-
-
-
-
-
-
-
-b <- sf::st_sf(data.frame(pkb, df))
-head(bg_apartments)
-names(b)[14] <- "dist"
-
-summary(b$dist)
-nrow(subset(b, dist == "Inf"))
-
-# calculate the aerial distance from every centroid to the closest station
-b$id <- 1:max(nrow(b)) # create id
-binf <- subset(b, dist == "Inf") # subset rows with infinite values
-cinf <- subset(cen, id %in% binf$id) # filter coords by rows with infinite values
-c <- st_coordinates(cinf) # get coordinates
-c <- as.data.frame(cbind(c, cinf$id)) # convert into df
-names(c) <- c("long", "lat", "id") # choose intuitive names
-
-# function to find the shortest aerial distance
-min_dist <- function(loc) {
-  sd <- c[c$id == loc, ]
-  sd1 <- distGeo(sd[, 1:2], to[, 1:2])
-  sd2 <- data.frame(
-    id = loc,
-    dist = min(sd1)
-  )
-  return(sd2)
-}
-dist_mat <- dplyr::bind_rows(lapply(c$id, min_dist))
-
-# plug new distances back into "b" and create "bb"
-# use if_else to replace infinite values with aerial distance
-bb <- b |>
-  left_join(dist_mat, by = "id") |>
-  mutate(dist = if_else(is.infinite(dist.x), dist.y, dist.x))
-
-# let's find a natural interval with quantile breaks
-ni <- classIntervals(bb$dist,
-  n = 8,
-  style = "quantile"
-)$brks
-
-# this function uses above intervals to create categories
-labels <- c()
-for (i in 1:length(ni)) {
-  labels <- c(labels, paste0(
-    round(ni[i], 0),
-    "–",
-    round(ni[i + 1], 0)
-  ))
-}
-labels <- labels[1:length(labels) - 1]
-
-# finally, carve out the categorical variable based on the breaks and labels
-bb$cat <- cut(bb$dist,
-  breaks = ni,
-  labels = labels,
-  include.lowest = T
-)
-levels(bb$cat) # let's check how many levels it has(8)
-
-# plot
-p <- ggplot() +
-  geom_sf(data = bb, aes(fill = cat), color = NA, size = 0) +
-  coord_sf(crs = 4326, datum = NA) +
-  scale_fill_manual(
-    name = "meters",
-    values = c(
-      "#ffffca", "#b9e0ad", "#72c099", "#109c99",
-      "#117581", "#154f68", "#122c4e", "#0c0636"
-    ),
-    labels = c(
-      "0–427", "427–601", "601–755",
-      "755–903", "903–1066", "1066–1288",
-      "1288–1758", ">1758"
-    ),
-    drop = F
-  ) +
-  guides(fill = guide_legend(
-    direction = "horizontal",
-    keyheight = unit(1.15, units = "mm"),
-    keywidth = unit(20, units = "mm"),
-    title.position = "top",
-    title.hjust = 0.5,
-    label.hjust = .5,
-    nrow = 1,
-    byrow = T,
-    reverse = F,
-    label.position = "bottom"
-  )) +
-  theme_minimal() +
-  theme(
-    text = element_text(family = "Georgia"),
-    axis.line = element_blank(),
-    axis.text.x = element_blank(),
-    axis.text.y = element_blank(),
-    axis.ticks = element_blank(),
-    axis.title.x = element_text(size = 9, color = "white", hjust = .7, vjust = 200),
-    axis.title.y = element_blank(),
-    legend.position = c(.5, -.015),
-    legend.text = element_text(size = 10, color = "grey20"),
-    legend.title = element_text(size = 11, color = "grey20"),
-    panel.grid.major = element_line(color = "white", size = 0.2),
-    panel.grid.minor = element_blank(),
-    plot.margin = unit(c(t = 0, r = 0, b = 0, l = 0), "lines"), # added these narrower margins to enlarge map
-    plot.title = element_text(face = "bold", size = 17, color = "#095169", hjust = .5, vjust = -2),
-    plot.subtitle = element_text(size = 16, color = "#53ba83", hjust = .5, vjust = -2),
-    plot.background = element_rect(fill = "white", color = NA),
-    panel.background = element_rect(fill = "white", color = NA),
-    legend.background = element_rect(fill = "white", color = NA),
-    panel.border = element_blank()
-  ) +
-  labs(
-    x = "©2021 Milos Popovic https://milospopovic.net\n Data: OSM Geofabrik",
-    title = "Shortest driving distance to a petrol station in Belgrade",
-    subtitle = "at census circle level",
-    caption = ""
-  )
-
 # 	|￣￣￣￣￣￣ |
 #    	| END        |
 #    	| REPLICATION|
@@ -483,3 +369,34 @@ p <- ggplot() +
 #    	(\__/) ||
 #    	(•ㅅ•) ||
 #    	/ 　 づ
+
+
+net <- weight_streetnet(hampi)
+v <- dodgr_vertices(net)
+head(v)
+set.seed(1)
+xy <- v[sample(nrow(v), size = 10), ]
+head(xy)
+p <- dodgr_paths(graph = net, from = xy, to = xy)
+head(p)
+class(v$id)
+# convert paths to sf-format:
+p_sf <- lapply(p, function(i) {
+  lapply(i, function(j) {
+    path_ij <- v[match(j, v$id), ]
+    st_linestring(as.matrix(path_ij[, c("x", "y")])) |>
+      st_sfc(crs = 4326)
+  })
+})
+
+# Then unlist to convert to single 'sfc' object:
+p_sf <- lapply(p_sf, function(i) do.call(rbind, i))
+p_sf <- do.call(rbind, p_sf)
+
+# add 'from' and 'to' columns:
+p_sf <- st_sf(
+  from = rep(names(p), each = nrow(xy)),
+  to = rep(names(p), times = nrow(xy)),
+  geometry = p_sf[, 1],
+  crs = 4326
+)
