@@ -220,113 +220,34 @@ ggplot() +
 # 9. WHAT IS THE SHORTEST?
 
 # compute distances
-route_distances <- dodgr::dodgr_dists(
-    graph = g,
-    from = xy,
-    to = to,
-    shortest = T
-)
+route_distances <- dodgr::dodgr_dists(graph = g, from = xy, to = to, shortest = T)
 
-head(route_distances)
+# convert to data frame and transpose
+route_distances_df <- t(as.data.frame(as.matrix(route_distances)))
 
-route_distances_df <- route_distances |>
-    as.matrix() |>
-    as.data.frame() |>
-    t()
+# get the shortest route distance and edge id
+shortest_route_distance_df <- route_distances_df %>%
+  as.data.frame() %>%
+  rownames_to_column("edge_id") %>%
+  mutate(distance = as.numeric(`8951126837`)) %>%
+  arrange(distance) %>%
+  distinct(edge_id, distance, .keep_all = T) %>%
+  slice_head(n = 1)
 
-head(route_distances_df)
-
-shortest_route_distance_df <- cbind(
-    edge_id = rownames(
-        route_distances_df
-    ),
-    route_distances_df
-) |>
-as.data.frame() |>
-dplyr::rename(
-    distance = `8951126837`
-) |>
-dplyr::mutate(
-    distance = as.numeric(distance)
-) |>
-dplyr::arrange(distance) |>
-dplyr::distinct(
-    edge_id, distance,
-    .keep_all = T
-) |>
-dplyr::slice_head(n = 1)
-
-
-head(shortest_route_distance_df)
-
-# get all paths
-
-df_graph_edges <- paths |>
-    unlist() |>
-    as.matrix() |>
-    as.data.frame()
-
-head(df_graph_edges)
-
-df_graph_edges <- cbind(
-    id = rownames(
-        df_graph_edges
-    ), df_graph_edges
-)
-
-head(df_graph_edges)
-
-names(df_graph_edges)[2] <- "edge_id"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+# get all paths and convert to data frame
+df_graph_edges <- as.data.frame(as.matrix(unlist(paths))) %>%
+  rownames_to_column("id") %>%
+  rename(edge_id = V1)
 
 # find shortest path among all paths
-
-shortest_line <- df_graph_edges |>
-    dplyr::filter(
-        stringr::str_detect(
-            id,
-            shortest_route_distance_df$edge_id
-        )
-    )
-
-head(shortest_line)
+shortest_line <- df_graph_edges %>%
+  filter(str_detect(id, shortest_route_distance_df$edge_id))
 
 # fetch shortest line from street network
-
-gsf <- dodgr::dodgr_to_sf(
-    g
-)
-
-shortest_path_sf <- gsf |>
-    dplyr::filter(
-        to_id %in% unique(
-            shortest_line$edge_id
-        )
-    ) |>
-    sf::st_intersection(paths_sf)
+gsf <- dodgr::dodgr_to_sf(g)
+shortest_path_sf <- gsf %>%
+  filter(to_id %in% unique(shortest_line$edge_id)) %>%
+  st_intersection(paths_sf)
 
 p5 <- ggplot() +
     tidyterra::geom_spatraster_rgb(
