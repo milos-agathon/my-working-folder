@@ -1,3 +1,6 @@
+
+setwd("/Users/mpopovic3/Downloads/india")
+
 # 1. PACKAGES
 
 libs <- c(
@@ -30,22 +33,45 @@ invisible(
 
 # 2. COUNTRY BORDERS
 
-country_sf <- giscoR::gisco_get_countries(
-    country = "BA",
-    resolution = "1"
+# 1. GET INDIAN STATES
+
+url <- "https://github.com/AnujTiwari/India-State-and-Country-Shapefile-Updated-Jan-2020/archive/refs/heads/master.zip"
+download.file(
+    url,
+    basename(url),
+    mode = "wb"
 )
 
-plot(sf::st_geometry(country_sf))
+unzip("master.zip")
 
-png("bih-borders.png")
+country_sf <- sf::st_read(
+    "India-State-and-Country-Shapefile-Updated-Jan-2020-master/India_State_Boundary.shp"
+) |>
+sf::st_union()
+
 plot(sf::st_geometry(country_sf))
-dev.off()
 
 # 3 DOWNLOAD ESRI LAND COVER TILES
 
 urls <- c(
-    "https://lulctimeseries.blob.core.windows.net/lulctimeseriesv003/lc2022/33T_20220101-20230101.tif",
-    "https://lulctimeseries.blob.core.windows.net/lulctimeseriesv003/lc2022/34T_20220101-20230101.tif"
+    "https://lulctimeseries.blob.core.windows.net/lulctimeseriesv003/lc2022/42S_20220101-20230101.tif",
+    "https://lulctimeseries.blob.core.windows.net/lulctimeseriesv003/lc2022/43S_20220101-20230101.tif",
+    "https://lulctimeseries.blob.core.windows.net/lulctimeseriesv003/lc2022/44S_20220101-20230101.tif",
+    "https://lulctimeseries.blob.core.windows.net/lulctimeseriesv003/lc2022/42R_20220101-20230101.tif",
+    "https://lulctimeseries.blob.core.windows.net/lulctimeseriesv003/lc2022/43R_20220101-20230101.tif",
+    "https://lulctimeseries.blob.core.windows.net/lulctimeseriesv003/lc2022/44R_20220101-20230101.tif",
+    "https://lulctimeseries.blob.core.windows.net/lulctimeseriesv003/lc2022/45R_20220101-20230101.tif",
+    "https://lulctimeseries.blob.core.windows.net/lulctimeseriesv003/lc2022/46R_20220101-20230101.tif",
+    "https://lulctimeseries.blob.core.windows.net/lulctimeseriesv003/lc2022/47R_20220101-20230101.tif",
+    "https://lulctimeseries.blob.core.windows.net/lulctimeseriesv003/lc2022/42Q_20220101-20230101.tif",
+    "https://lulctimeseries.blob.core.windows.net/lulctimeseriesv003/lc2022/43Q_20220101-20230101.tif",
+    "https://lulctimeseries.blob.core.windows.net/lulctimeseriesv003/lc2022/44Q_20220101-20230101.tif",
+    "https://lulctimeseries.blob.core.windows.net/lulctimeseriesv003/lc2022/45Q_20220101-20230101.tif",
+    "https://lulctimeseries.blob.core.windows.net/lulctimeseriesv003/lc2022/46Q_20220101-20230101.tif",
+    "https://lulctimeseries.blob.core.windows.net/lulctimeseriesv003/lc2022/43P_20220101-20230101.tif",
+    "https://lulctimeseries.blob.core.windows.net/lulctimeseriesv003/lc2022/44P_20220101-20230101.tif",
+    "https://lulctimeseries.blob.core.windows.net/lulctimeseriesv003/lc2022/46P_20220101-20230101.tif",
+    "https://lulctimeseries.blob.core.windows.net/lulctimeseriesv003/lc2022/46N_20220101-20230101.tif"
 )
 
 for(url in urls){
@@ -64,7 +90,7 @@ raster_files <- list.files(
     full.names = T
 )
 
-crs <- "EPSG:4326"
+crs <- "+proj=lcc +lat_1=32.5 +lat_0=32.5 +lon_0=68 +k_0=0.99878641 +x_0=2743195.5 +y_0=914398.5 +a=6377299.151 +rf=300.8017255 +towgs84=295,736,257,0,0,0,0 +units=m +no_defs +type=crs"
 
 for(raster in raster_files){
     rasters <- terra::rast(raster)
@@ -94,7 +120,7 @@ for(raster in raster_files){
         land_cover,
         paste0(
             raster,
-            "_bosnia",
+            "_india",
             ".tif"
         )
     )
@@ -104,13 +130,13 @@ for(raster in raster_files){
 
 r_list <- list.files(
     path = getwd(),
-    pattern = "_bosnia",
+    pattern = "_india.tif",
     full.names = T
 )
 
 land_cover_vrt <- terra::vrt(
     r_list,
-    "bosnia_land_cover_vrt.vrt",
+    "india_land_cover_vrt.vrt",
     overwrite = T
 )
 
@@ -141,38 +167,40 @@ from <- c(1:2, 4:5, 7:11)
 to <- t(col2rgb(cols))
 land_cover_vrt <- na.omit(land_cover_vrt)
 
-land_cover_bosnia <- terra::subst(
+land_cover_india <- terra::subst(
     land_cover_vrt,
     from = from,
     to = to,
     names = cols
 )
 
-terra::plotRGB(land_cover_bosnia)
+terra::plotRGB(land_cover_india)
 
 # 8 DIGITAL ELEVATION MODEL
 
 elev <- elevatr::get_elev_raster(
     locations = country_sf,
-    z = 9, clip = "locations"
+    z = 7, clip = "locations"
 )
 
-crs_lambert <-
-    "+proj=laea +lat_0=52 +lon_0=10 +x_0=4321000 +y_0=3210000 +datum=WGS84 +units=m +no_frfs"
+elev_lambert <- elev |>
+    terra::rast() |>
+    terra::project(crs)
 
-land_cover_bosnia_resampled <- terra::resample(
-    x = land_cover_bosnia,
-    y = terra::rast(elev),
+
+land_cover_india_resampled <- terra::resample(
+    x = land_cover_india,
+    y = elev_lambert,
     method = "near"
 ) |>
-terra::project(crs_lambert)
+terra::project(crs)
 
-terra::plotRGB(land_cover_bosnia_resampled)
+terra::plotRGB(land_cover_india_resampled)
 
-img_file <- "land_cover_bosnia.png"
+img_file <- "land_cover_india.png"
 
 terra::writeRaster(
-    land_cover_bosnia_resampled,
+    land_cover_india_resampled,
     img_file,
     overwrite = T,
     NAflag = 255
@@ -183,9 +211,7 @@ img <- png::readPNG(img_file)
 # 9. RENDER SCENE
 #----------------
 
-elev_lambert <- elev |>
-    terra::rast() |>
-    terra::project(crs_lambert)
+
 
 elmat <- rayshader::raster_to_matrix(
     elev_lambert
@@ -220,25 +246,25 @@ elmat |>
     )
 
 rayshader::render_camera(
-    zoom = .58
+    zoom = .55
 )
 
 # 10. RENDER OBJECT
 #-----------------
 
-filename <- "3d_land_cover_bosnia-dark.png"
+filename <- "3d_land_cover_india-dark.png"
 
 rayshader::render_highquality(
     filename = filename,
     preview = T,
     light = F,
-    environment_light = "D:/forest2019/air_museum_playground_4k.hdr",
-    intensity_env = 1,
+    environment_light = "air_museum_playground_4k.hdr",
+    intensity_env = .85,
     rotate_env = 90,
     interactive = F,
     parallel = T,
-    width = w * 1.5,
-    height = h * 1.5
+    width = w,
+    height = h
 )
 
 # 11. PUT EVERYTHING TOGETHER
@@ -310,5 +336,5 @@ p <- magick::image_composite(
 )
 
 magick::image_write(
-    p, "3d_bosnia_land_cover_final.png"
+    p, "3d_india_land_cover_final.png"
 )
