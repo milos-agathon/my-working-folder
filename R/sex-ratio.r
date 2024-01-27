@@ -4,9 +4,10 @@
 #############################################
 setwd("/Users/mpopovic3/Downloads/sex-ratio")
 
+remotes::install_github("ropensci/osmdata")
+
 libs <- c(
-    "giscoR", "terra", "elevatr",
-    "tidyverse", "rayshader", "magick"
+   "terra", "tidyverse", "osmdata"
 )
 
 installed_libs <- libs %in% rownames(
@@ -24,31 +25,28 @@ invisible(lapply(
     character.only = T
 ))
 
-# 1. COUNTRY BOUNDARIES
+# 1. CITY BOUNDARIES
 #----------------------
+place_name <- "Paris, France"
 
-main_dir <- getwd()
-
-country_sf <- geodata::gadm(
-    country = "BE",
-    level = 1,
-    path = main_dir
+city_border <- osmdata::getbb(
+    place_name = place_name,
+    format_out = "sf_polygon",
+    limit = 1,
+    featuretype = "settlement"
 ) |>
-    sf::st_as_sf() |>
-    dplyr::filter(
-        NAME_1 == "Bruxelles"
-    )
+    sf::st_set_crs(4326) 
 
-plot(sf::st_geometry(country_sf))
-
-unique(country_sf$NAME_1)
+plot(sf::st_geometry(city_border))
 
 # 2. DATA
 #--------
 
+options(timeout = 999)
+
 urls <- c(
-    "https://data.humdata.org/dataset/1979ecab-8630-41f3-a826-b2dc71fe0bc4/resource/989ce23c-0218-4da9-bf77-c1ad94a7257f/download/bel_men_2020_geotiff.zip",
-    "https://data.humdata.org/dataset/1979ecab-8630-41f3-a826-b2dc71fe0bc4/resource/7ee111b4-084d-4850-a177-c3b7bf2bdd75/download/bel_women_2020_geotiff.zip"
+    "https://data.humdata.org/dataset/da0f4294-57ea-473d-98b8-315f1135f793/resource/2cddeeda-3263-4c23-973d-9b931b9c3066/download/fra_men_geotiff.zip",
+    "https://data.humdata.org/dataset/da0f4294-57ea-473d-98b8-315f1135f793/resource/fc23467b-63ca-4013-8100-98cb68fc9336/download/fra_women_geotiff.zip"
 )
 
 for (url in urls) {
@@ -57,6 +55,8 @@ for (url in urls) {
         mode = "wb"
     )
 }
+
+main_dir <- getwd()
 
 zip_files <- list.files(
     path = main_dir,
@@ -80,15 +80,15 @@ raster_list <- lapply(
     terra::rast
 )
 
-# 3 CROP SWISS DATA
+# 3 CROP DATA
 
-country_rasters <- lapply(
+city_rasters <- lapply(
     raster_list,
     function(x) {
         terra::crop(
             x,
             terra::vect(
-                country_sf
+                city_border
             ),
             snap = "in",
             mask = T
@@ -99,18 +99,8 @@ country_rasters <- lapply(
 # 4. CALCULATE HUMAN SEX RATIO
 #-----------------------------
 
-# sex_ratio <- terra::lapp(
-#     terra::sds(
-#         list(
-#             raster_list[[1]], raster_list[[2]]
-#             )),
-#     fun = function(males, females){
-#         return((100 * males) / females)
-#     }
-# )
-
 sex_ratio <- (
-    (100 * country_rasters[[1]]) / country_rasters[[2]]
+    (100 * city_rasters[[1]]) / city_rasters[[2]]
 )
 
 terra::plot(sex_ratio)
@@ -118,150 +108,16 @@ plot(sf::st_geometry(country_sf), add = T)
 
 crs_europe <- "EPSG:3035"
 
-
-
-sex_ratio_agg <- terra::aggregate(
-    x = sex_ratio_reproj,
-    fact = 2,
-    fun = "mean"
-)
-
 terra::plot(sex_ratio_agg)
-
-
-
-c("#2686A0", "#EDEAC2", "#A36B2B")
-
-p <- ggplot(sex_ratio_df) +
-    tidyterra::geom_spatraster_rgb(
-        data = lay
-    ) +
-    geom_sf(
-        data = country_sf,
-        fill = NA,
-        color = "grey10",
-        size = 1
-    ) +
-    geom_tile(
-        data = sex_ratio_df,
-        aes(
-            x = x, y = y,
-            fill = ratio
-        ),
-        na.rm = T
-    ) +
-    scale_fill_gradient2(
-        name = "",
-        low = "#2686A0",
-        mid = "#EDEAC2",
-        high = "#A36B2B",
-        midpoint = 100,
-        limits = limits,
-        breaks = round(breaks, 0),
-        na.value = "white",
-        guide = "colourbar"
-    ) +
-    coord_sf(crs = crs_europe) +
-    guides(
-        fill = guide_colorbar(
-            direction = "vertical",
-            title.position = "top",
-            label.position = "right",
-            title.hjust = .5,
-            title.vjust = 4,
-            label.hjust = 0,
-            nrow = 1,
-            drop = F
-        )
-    ) +
-    theme_minimal() +
-    theme(
-        axis.line = element_blank(),
-        axis.title.x = element_blank(),
-        axis.title.y = element_blank(),
-        axis.text.x = element_blank(),
-        axis.text.y = element_blank(),
-        legend.position = c(.1, .85),
-        legend.title = element_text(
-            size = 12, color = "grey10"
-        ),
-        legend.text = element_text(
-            size = 10, color = "grey10"
-        ),
-        panel.grid.major = element_blank(),
-        panel.grid.minor = element_blank(),
-        plot.background = element_blank(),
-        legend.background = element_rect(
-            fill = "white", color = NA
-        ),
-        panel.border = element_blank(),
-        plot.margin = unit(
-            c(
-                t = 0, r = 0,
-                b = 0, l = 0
-            ), "lines"
-        )
-    )
-# print(p)
-
-w <- ncol(sex_ratio_reproj)
-h <- nrow(sex_ratio_reproj)
-
-ggsave(
-    "brussels-sex-ratio-layer.png",
-    p,
-    width = w * 5,
-    height = h * 5,
-    units = "px",
-    bg = "white"
-)
-
-rayshader::plot_gg(
-    ggobj = p,
-    width = w / 100,
-    height = h / 100,
-    windowsize = c(w, h),
-    scale = 200,
-    solid = F,
-    shadow = T,
-    shadowcolor = "white",
-    # shadowwidth = 0,
-    shadow_intensity = 1,
-    zoom = .5,
-    phi = 30,
-    theta = -30,
-    multicore = T
-)
-
-rayshader::render_camera(
-    phi = 87,
-    zoom = .58,
-    theta = 0
-)
-
-rayshader::render_highquality(
-    # filename = "brussels-sex-balance-3d.png",
-    preview = T,
-    interactive = F,
-    parallel = T,
-    light = F,
-    environment_light = "/Users/mpopovic3/Downloads/brown_photostudio_02_4k.hdr",
-    intensity_env = 1.25,
-    rotate_env = 90,
-    width = w,
-    height = h,
-    sample_method = "sobol"
-)
-
-bb <- country_sf |>
-    sf::st_bbox(crs = 4326) |>
-    sf::st_as_sfc(crs = 4326) |>
-    sf::st_transform(crs = crs_europe)
 
 # 3. GET STREET LAYER
 
+city_bbox <- 
+    sf::st_bbox(city_border) |>
+    sf::st_as_sfc(crs = 4326)
+
 layer <- maptiles::get_tiles(
-    bb,
+    city_bbox,
     provider = "CartoDB.Positron",
     zoom = 12,
     crop = T,
@@ -274,7 +130,6 @@ sex_ratio_reproj <- terra::project(
 )
 
 terra::plot(layer, smooth = T)
-maptiles::plot_tiles(layer)
 
 # 5. RASTER TO DATAFRAME
 #-----------------------
@@ -297,20 +152,13 @@ breaks <- classInt::classIntervals(
     style = "equal"
 )$brks
 
-cols <- hcl.colors(
-    n = 3,
-    palette = "Earth",
-    rev = T
-)
-
 p2 <-
     ggplot(data = sex_ratio_df) +
     tidyterra::geom_spatraster_rgb(
-        data = layer,
-        smooth = T
+        data = layer
     ) +
     geom_sf(
-        data = country_sf,
+        data = city_border,
         fill = NA,
         color = "white",
         size = 1
@@ -368,7 +216,7 @@ w <- ncol(sex_ratio_reproj)
 h <- nrow(sex_ratio_reproj)
 
 ggsave(
-    "brussels-sex-ratio-layer.png",
+    "paris-sex-ratio-layer.png",
     p2,
     width = w * 5,
     height = h * 5,
