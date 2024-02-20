@@ -84,6 +84,10 @@ dev.off()
 # 2. PALETTE
 #-----------
 
+# NORD -> #114A60
+# CENTRO -> #598DA6
+# SUD -> #84C0B0
+
 palette_basin <- hcl.colors(
     n = 10,
     palette = "Dark 3"
