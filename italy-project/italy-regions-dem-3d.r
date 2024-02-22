@@ -51,10 +51,217 @@ north <- c(
     "Piemonte", "Valle d'Aosta", "Veneto"
 )
 
-north_sf <- country_sf |>
-    dplyr::filter(NAME_1 %in% north)
+not_north <- country_sf$NAME_1[!country_sf$NAME_1 %in% north]
 
-plot(sf::st_geometry(north_sf))
+center <- c(
+    "Abruzzo", "Lazio",
+    "Marche", "Toscana",
+    "Umbria"
+)
+
+not_center <- country_sf$NAME_1[!country_sf$NAME_1 %in% center]
+
+south <- c(
+    "Apulia", "Basilicata",
+    "Calabria", "Campania",
+    "Molise", "Sardegna",
+    "Sicily"
+)
+not_south <- country_sf$NAME_1[!country_sf$NAME_1 %in% south]
+
+# 3. DEM
+#-------
+
+elevation_raster <- elevatr::get_elev_raster(
+    locations = country_sf,
+    z = 8, clip = "locations"
+)
+
+crs_lambert <-
+    "+proj=laea +lat_0=52 +lon_0=10 +x_0=4321000 +y_0=3210000 +datum=WGS84 +units=m +no_frfs"
+
+elevation_raster_lambert <- elevation_raster |>
+    terra::rast() |>
+    terra::project(crs_lambert)
+
+elevation_matrix <- rayshader::raster_to_matrix(
+    elevation_raster_lambert
+)
+
+country <- country_sf |>
+    sf::st_transform(crs = crs_lambert) |>
+    dplyr::mutate(
+        NAME_1 = as.factor(NAME_1)
+    )
+
+north_sf <- country |>
+    dplyr::filter(
+        NAME_1 %in% north
+    )
+
+center_sf <- country |>
+    dplyr::filter(
+        NAME_1 %in% center
+    )
+
+south_sf <- country |>
+    dplyr::filter(
+        NAME_1 %in% south
+    )
+
+# 4. PALETTE
+#----------
+
+# north
+pal_north <- c(
+    rep("#114A60", length(
+        north
+    )),
+    rep("grey60", length(
+        not_north
+    ))
+)
+
+region_names <- c(
+    north,
+    not_north
+)
+
+names(pal_north) <- unique(
+    region_names
+)
+
+# center
+pal_center <- c(
+    rep("#2596be", length(
+        center
+    )),
+    rep("grey60", length(
+        not_center
+    ))
+)
+
+region_names <- c(
+    center,
+    not_center
+)
+
+names(pal_center) <- unique(
+    region_names
+)
+
+# south
+pal_south <- c(
+    rep("#84c0b0", length(
+        south
+    )),
+    rep("grey60", length(
+        not_south
+    ))
+)
+
+region_names <- c(
+    south,
+    not_south
+)
+
+names(pal_south) <- unique(
+    region_names
+)
+
+# total
+regions_names <- c(
+    north,
+    center,
+    south
+)
+
+pal_total <- c(
+    rep("#114A60", length(
+        north
+    )),
+    rep("#2596be", length(
+        center
+    )),
+    rep("#84c0b0", length(
+        south
+    ))
+)
+
+names(pal_total) <- unique(
+    region_names
+)
+
+# 4. RENDER SCENE
+#----------------
+
+h <- nrow(elevation_raster_lambert)
+w <- ncol(elevation_raster_lambert)
+
+elevation_matrix |>
+    rayshader::height_shade(
+        texture = colorRampPalette(
+            c(
+                "grey80",
+                "grey40"
+            )
+        )(256)
+    ) |>
+    rayshader::add_overlay(
+        rayshader::generate_polygon_overlay(
+            geometry = south_sf, # change here
+            extent = elevation_raster_lambert,
+            heightmap = elevation_matrix,
+            linecolor = "white",
+            linewidth = 12,
+            palette = pal_south, # change
+            data_column_fill = "NAME_1"
+        ),
+        alphalayer = 1 # REDO
+    ) |>
+    rayshader::plot_3d(
+        elevation_matrix,
+        zscale = 25,
+        solid = F,
+        shadow = F, # REDO
+        shadow_darkness = 1, # REDO
+        background = "white",
+        windowsize = c(
+            w / 8, h / 8
+        ),
+        zoom = .7,
+        phi = 89,
+        theta = 0
+    )
+
+# REDO
+rayshader::render_camera(
+    zoom = .61,
+    phi = 89,
+    theta = 0
+)
+
+# 9. RENDER OBJECT
+#-----------------
+
+rayshader::render_highquality(
+    filename = "south-3d.png",
+    preview = T,
+    light = T,
+    environment_light = "limpopo_golf_course_4k.hdr",
+    rotate_env = 0,
+    intensity_env = .4,
+    # ground_material = rayrender::diffuse(
+    #     color = "grey10"
+    # ),
+    interactive = F,
+    parallel = T,
+    width = w,
+    height = h
+)
+
+# ©2024 Milos Popovic (https://milospopovic.net)
+# Data: ©World Wildlife Fund, Inc. (2006-2013) HydroSHEDS database http://www.hydrosheds.org
 
 # pdf(
 #     file = "italy-regions.pdf",
@@ -91,145 +298,3 @@ plot(sf::st_geometry(north_sf))
 # )
 # plot(sf::st_geometry(country_sf))
 # dev.off()
-
-# 2. PALETTE
-#-----------
-
-palette_basin <- hcl.colors(
-    n = 10,
-    palette = "Dark 3"
-) |>
-    sample()
-
-# pal_basin <- palette_basin
-
-pal_basin <- colorRampPalette(
-    palette_basin
-)(20)
-
-# 3. DEM
-#-------
-
-elevation_raster <- elevatr::get_elev_raster(
-    locations = north_sf,
-    z = 8, clip = "locations"
-)
-
-crs_lambert <-
-    "+proj=laea +lat_0=52 +lon_0=10 +x_0=4321000 +y_0=3210000 +datum=WGS84 +units=m +no_frfs"
-
-elevation_raster_lambert <- elevation_raster |>
-    terra::rast() |>
-    terra::project(crs_lambert)
-
-elevation_matrix <- rayshader::raster_to_matrix(
-    elevation_raster_lambert
-)
-
-nord <- north_sf |>
-    sf::st_transform(crs = crs_lambert) |>
-    dplyr::mutate(
-        NAME_1 = as.factor(NAME_1)
-    ) 
-nord_line <- nord |>
-    sf::st_cast("MULTILINESTRING")
-
-pal <- rep("#114A60", length(
-    unique(
-        nord$NAME_1
-    )
-))
-
-names(pal) <- unique(
-    nord$NAME_1
-)
-
-# 4. RENDER SCENE
-#----------------
-
-h <- nrow(elevation_raster_lambert)
-w <- ncol(elevation_raster_lambert)
-
-elevation_matrix |>
-    rayshader::height_shade(
-        texture = colorRampPalette(
-            c(
-                "grey80",
-                "grey40"
-            )
-        )(256)
-    ) |>
-    # rayshader::add_overlay(
-    #     rayshader::generate_line_overlay(
-    #         geometry = nord_line,
-    #         extent = elevation_raster_lambert,
-    #         heightmap = elevation_matrix,
-    #         color = "black",
-    #         linewidth = 10
-    #     ),
-    #     alphalayer = 1
-    # ) |>
-    rayshader::add_overlay(
-        rayshader::generate_polygon_overlay(
-            geometry = nord,
-            extent = elevation_raster_lambert,
-            heightmap = elevation_matrix,
-            linecolor = "black",
-            linewidth = 7,
-            palette = pal,
-            data_column_fill = "NAME_1"
-        ),
-        alphalayer = 1 # REDO
-    ) |>
-    rayshader::plot_3d(
-        elevation_matrix,
-        zscale = 15,
-        solid = F,
-        shadow = F, # REDO
-        shadow_darkness = 1, # REDO
-        background = "white",
-        windowsize = c(
-            800, 800
-        ),
-        zoom = .7,
-        phi = 85,
-        theta = 0
-    )
-
-# REDO
-rayshader::render_camera(
-    zoom = .9,
-    phi = 85,
-    theta = 0
-)
-
-# 9. RENDER OBJECT
-#-----------------
-
-
-# u <- "https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/4k/limpopo_golf_course_4k.hdr"
-
-# download.file(
-#     url = u,
-#     destfile = basename(u),
-#     mode = "wb"
-# )
-
-rayshader::render_highquality(
-    filename = "nord-3d-light.png",
-    preview = T,
-    light = T,
-    environment_light = "limpopo_golf_course_4k.hdr",
-    rotate_env = 0,
-    intensity_env = 8,
-    # ground_material = rayrender::diffuse(
-    #     color = "grey10"
-    # ),
-    interactive = F,
-    parallel = T,
-    width = 4000,
-    height = 4000
-)
-
-# ©2024 Milos Popovic (https://milospopovic.net)
-# Data: ©World Wildlife Fund, Inc. (2006-2013) HydroSHEDS database http://www.hydrosheds.org
