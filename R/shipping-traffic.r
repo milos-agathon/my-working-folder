@@ -133,18 +133,15 @@ nightlight_resampled <- terra::resample(
     method = "bilinear"
 )
 
-
-
 terra::plot(nightlight_resampled)
 
 # STEP 5: Map
 
 nightlight_cols <- c("black", "#1f4762", "#FFD966", "white")
-# nightlight_cols <- c("black", "grey80", "white")
 
 nightlight_pal <- colorRampPalette(
     nightlight_cols,
-    bias = 8
+    bias = 12
 )(512)
 
 shipping_traffic_cols <- hcl.colors(
@@ -187,9 +184,6 @@ geom_tile(
                 fill = nightlight_value
             )
         ) +
-    # tidyterra::geom_spatraster(
-    #     data = nightlight_resampled
-    # ) +
     scale_fill_gradientn(
         colours = nightlight_pal
     ) +
@@ -203,9 +197,6 @@ geom_tile(
                 fill = shipdensity_global
             )
         ) +
-    # tidyterra::geom_spatraster(
-    #     data = shipping_traffic_clean
-    # ) +
     scale_fill_gradientn(
         colours = shipping_traffic_pal,
         breaks = traffic_breaks
