@@ -2,7 +2,7 @@
 # 3D forest map with R
 # Milos Popovic 2023/04/23
 #############################################
-setwd("D:/forest2019")
+setwd("/Users/mpopovic3/Downloads/russia")
 
 # define libraries we need
 libs <- c(
@@ -24,40 +24,42 @@ invisible(lapply(libs, library, character.only = T))
 # Lambert projection
 crs_longlat <- "+proj=longlat +datum=WGS84 +no_frfs"
 sf::sf_use_s2(F)
-crs_lambert <- "+proj=laea +lat_0=52 +lon_0=10 +x_0=4321000 +y_0=3210000 +datum=WGS84 +units=m +no_defs"
-
-
-get_bbox <- function() {
-    bb <- sf::st_sfc(
-        sf::st_polygon(list(
-            cbind(
-                c(-5.207520, 9.656982, 9.656982, -5.207520, -5.207520),
-                c(41.335576, 41.335576, 51.179343, 51.179343, 41.335576)
-            )
-        )),
-        crs = "EPSG:4326"
-    )
-
-    return(bb)
-}
-
-bb <- get_bbox()
 
 country_borders <- giscoR::gisco_get_countries(
-    resolution = "1",
-    country = "FR"
-) |>
-    sf::st_intersection(bb)
-
-plot(sf::st_geometry(country_borders))
+    country = "RUS",
+    resolution = "10"
+)
 
 # 2. GET FOREST COVER
 #--------------------
 
-raster_files <- c(
-    "W020N60_PROBAV_LC100_global_v3.0.1_2019-nrt_Tree-CoverFraction-layer_EPSG-4326.tif",
-    "E000N60_PROBAV_LC100_global_v3.0.1_2019-nrt_Tree-CoverFraction-layer_EPSG-4326.tif"
+urls <- c(
+    "https://s3-eu-west-1.amazonaws.com/vito.landcover.global/v3.0.1/2019/E040N80/E040N80_PROBAV_LC100_global_v3.0.1_2019-nrt_Tree-CoverFraction-layer_EPSG-4326.tif",
+    "https://s3-eu-west-1.amazonaws.com/vito.landcover.global/v3.0.1/2019/E060N80/E060N80_PROBAV_LC100_global_v3.0.1_2019-nrt_Tree-CoverFraction-layer_EPSG-4326.tif",
+    "https://s3-eu-west-1.amazonaws.com/vito.landcover.global/v3.0.1/2019/E080N80/E080N80_PROBAV_LC100_global_v3.0.1_2019-nrt_Tree-CoverFraction-layer_EPSG-4326.tif",
+    "https://s3-eu-west-1.amazonaws.com/vito.landcover.global/v3.0.1/2019/E100N80/E100N80_PROBAV_LC100_global_v3.0.1_2019-nrt_Tree-CoverFraction-layer_EPSG-4326.tif",
+    "https://s3-eu-west-1.amazonaws.com/vito.landcover.global/v3.0.1/2019/E120N80/E120N80_PROBAV_LC100_global_v3.0.1_2019-nrt_Tree-CoverFraction-layer_EPSG-4326.tif",
+    "https://s3-eu-west-1.amazonaws.com/vito.landcover.global/v3.0.1/2019/E140N80/E140N80_PROBAV_LC100_global_v3.0.1_2019-nrt_Tree-CoverFraction-layer_EPSG-4326.tif",
+    "https://s3-eu-west-1.amazonaws.com/vito.landcover.global/v3.0.1/2019/E160N80/E160N80_PROBAV_LC100_global_v3.0.1_2019-nrt_Tree-CoverFraction-layer_EPSG-4326.tif",
+    "https://s3-eu-west-1.amazonaws.com/vito.landcover.global/v3.0.1/2019/W180N80/W180N80_PROBAV_LC100_global_v3.0.1_2019-nrt_Tree-CoverFraction-layer_EPSG-4326.tif",
+    "https://s3-eu-west-1.amazonaws.com/vito.landcover.global/v3.0.1/2019/E040N60/E040N60_PROBAV_LC100_global_v3.0.1_2019-nrt_Tree-CoverFraction-layer_EPSG-4326.tif",
+    "https://s3-eu-west-1.amazonaws.com/vito.landcover.global/v3.0.1/2019/E060N60/E060N60_PROBAV_LC100_global_v3.0.1_2019-nrt_Tree-CoverFraction-layer_EPSG-4326.tif",
+    "https://s3-eu-west-1.amazonaws.com/vito.landcover.global/v3.0.1/2019/E080N60/E080N60_PROBAV_LC100_global_v3.0.1_2019-nrt_Tree-CoverFraction-layer_EPSG-4326.tif",
+    "https://s3-eu-west-1.amazonaws.com/vito.landcover.global/v3.0.1/2019/E100N60/E100N60_PROBAV_LC100_global_v3.0.1_2019-nrt_Tree-CoverFraction-layer_EPSG-4326.tif",
+    "https://s3-eu-west-1.amazonaws.com/vito.landcover.global/v3.0.1/2019/E120N60/E120N60_PROBAV_LC100_global_v3.0.1_2019-nrt_Tree-CoverFraction-layer_EPSG-4326.tif",
+    "https://s3-eu-west-1.amazonaws.com/vito.landcover.global/v3.0.1/2019/E140N60/E140N60_PROBAV_LC100_global_v3.0.1_2019-nrt_Tree-CoverFraction-layer_EPSG-4326.tif",
+    "https://s3-eu-west-1.amazonaws.com/vito.landcover.global/v3.0.1/2019/E160N60/E160N60_PROBAV_LC100_global_v3.0.1_2019-nrt_Tree-CoverFraction-layer_EPSG-4326.tif"
 )
+
+for (url in urls) {
+    download.file(
+        url,
+        destfile = basename(url),
+        mode = "wb"
+    )
+}
+
+raster_files <- basename(urls)
 
 # 3. LOAD forest COVER
 #---------------------
@@ -69,9 +71,7 @@ forest_rasters <- lapply(
     function(x) {
         terra::crop(
             x,
-            terra::vect(country_borders),
-            snap = "in",
-            mask = T
+            terra::vect(country_borders)
         )
     }
 )
@@ -81,17 +81,27 @@ forest_cover_mosaic <- do.call(
     forest_rasters
 )
 
-forest_cover_fr <- forest_cover_mosaic |>
-    terra::project(crs_lambert) |>
-    terra::aggregate(fact = 2)
+forest_cover_agg <- forest_cover_mosaic |>
+    terra::crop(
+        terra::vect(country_borders),
+        snap = "in",
+        mask = TRUE
+    )
+
+crs_lambert <-
+    "+proj=stere +lat_0=90 +lat_ts=70 +lon_0=105 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs"
+
+forest_cover_reproj <- forest_cover_agg |>
+    terra::aggregate(fact = 5) |>
+    terra::project(crs_lambert)
 
 terra::plot(
-    forest_cover_fr
+    forest_cover_reproj
 )
 
 # 4. RASTER TO DATAFRAME
 #-----------------------
-forest_cover_df <- forest_cover_fr |>
+forest_cover_df <- forest_cover_reproj |>
     as.data.frame(xy = T)
 
 names(forest_cover_df)
@@ -154,12 +164,12 @@ p <- ggplot(forest_cover_df) +
         axis.title.y = element_blank(),
         axis.text.x = element_blank(),
         axis.text.y = element_blank(),
-        legend.position = c(.1, .4),
+        legend.position = c(.9, .2),
         legend.title = element_text(
-            size = 11, color = "grey10"
+            size = 14, color = "grey10"
         ),
         legend.text = element_text(
-            size = 10, color = "grey10"
+            size = 12, color = "grey10"
         ),
         panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
@@ -187,21 +197,21 @@ p <- ggplot(forest_cover_df) +
 # 9. RAYSHADER
 #-------------
 
-h <- nrow(forest_cover_fr)
-w <- ncol(forest_cover_fr)
+h <- nrow(forest_cover_reproj)
+w <- ncol(forest_cover_reproj)
 
 rayshader::plot_gg(
     ggobj = p,
     width = w / 1000,
     height = h / 1000,
-    scale = 150,
+    scale = 200,
     solid = F,
     shadow = T,
     shadowcolor = "white",
     shadowwidth = 0,
     shadow_intensity = 1,
     sunangle = 315,
-    window.size = c(w / 10, h / 10),
+    window.size = c(800, 800),
     zoom = .5,
     phi = 30,
     theta = -30,
@@ -209,8 +219,8 @@ rayshader::plot_gg(
 )
 
 rayshader::render_camera(
-    phi = 85,
-    zoom = .65,
+    phi = 89,
+    zoom = .85,
     theta = 0
 )
 
@@ -218,21 +228,21 @@ rayshader::render_camera(
 #-----------------
 
 rayshader::render_highquality(
-    filename = "france-forest-cover-2019c.png",
+    filename = "argentina-forest-cover-2019.png",
     preview = T,
     interactive = F,
     parallel = T,
     light = F,
-    environment_light = "D:/forest2019/air_museum_playground_4k.hdr",
-    intensity_env = 1.85,
+    environment_light = "/Users/mpopovic3/Downloads/air_museum_playground_4k.hdr",
+    intensity_env = 1.25,
     rotate_env = 90,
     ground_material =
         rayrender::microfacet(
             roughness = .6
         ),
-    width = w,
-    height = h
+    width = 4000,
+    height = 4000
 )
 
-# ©2023 Milos Popovic (https://milospopovic.net) 
+# ©2024 Milos Popovic (https://milospopovic.net)
 # Data:  Copernicus Global Land Service: Land Cover 100m
